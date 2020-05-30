@@ -1,0 +1,12 @@
+apiVersion: demos.fearofoblivion.com/v1
+kind: DnsRecordset
+metadata:
+  name: demo.zerokoll.com
+spec:
+  dnsZone: zerokoll.com
+  recordSets:
+    - name: dnsdemo
+      type: A
+      ttlSecs: 3600
+      ipAddresses:
+        - 127.0.0.1

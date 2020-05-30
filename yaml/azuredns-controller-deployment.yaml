@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-dns-controller
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: azure-dns-controller
+  template:
+    metadata:
+      labels:
+        app: azure-dns-controller
+    spec:
+      containers:
+      - name: azure-dns-controller
+        image: zerokoll.azurecr.io/azure-dns-controller:1.0
+        ports:
+        - containerPort: 80
+        resources:
+            limits:
+              memory: 128Mi
+              cpu: 250m
+      - name: leader-election
+        image: fredrikjanssonse/leader-elector:0.6
+        args:
+        - --election=foo-election
+        - --http=0.0.0.0:4040
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 4040
+        resources:
+            limits:
+              memory: 128Mi
+              cpu: 250m
