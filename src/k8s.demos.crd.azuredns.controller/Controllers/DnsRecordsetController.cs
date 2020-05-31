@@ -13,14 +13,14 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
 {
     public class DnsRecordsetController : KubernetesResourceController<DnsRecordset>
     {
-        private readonly ILogger<AzureDnsCredentialsController> _logger;
+        private readonly ILogger<DnsRecordset> _logger;
         private readonly ConcurrentDictionary<string, DnsRecordset> _recordsets = new ConcurrentDictionary<string, DnsRecordset>();
         private readonly IDnsClientFactory _dnsClientFactory;
 
         public DnsRecordsetController(IKubernetes kubernetes, ILeaderSelector leaderSelector, ILoggerFactory loggerFactory, IDnsClientFactory dnsClientFactory)
             : base(kubernetes, leaderSelector, loggerFactory.CreateLogger<KubernetesResourceController<DnsRecordset>>())
         {
-            _logger = loggerFactory.CreateLogger<AzureDnsCredentialsController>();
+            _logger = loggerFactory.CreateLogger<DnsRecordset>();
             _dnsClientFactory = dnsClientFactory;
         }
 
@@ -52,26 +52,48 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
             if (!_dnsClientFactory.TryGetClient(recordset.Spec.DnsZone, out var client))
             {
                 _logger.LogWarning($"Missing credentials for zone {recordset.Spec.DnsZone}. Retrying...");
-                await UpdateStatus(recordset, DnsRecordset.Statuses.Retrying);
+                await UpdateRecordsetStatus(recordset, DnsRecordset.Statuses.Retrying);
                 new Timer(async x => await RecordsetAdded(recordset), null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
                 return;
             }
 
-            await UpdateStatus(recordset, DnsRecordset.Statuses.Creating);
+            await UpdateRecordsetStatus(recordset, DnsRecordset.Statuses.Creating);
 
-            foreach (var record in recordset.Spec.RecordSets)
+            foreach (var record in recordset.Spec.ARecords)
             {
                 try
                 {
-                    await client.AddRecordset(record.Name, record.Type, record.TtlSecs, record.IpAddresses);
+                    await client.AddARecordset(record.Name, record.TtlSecs, record.IpAddresses);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Could not add recordset!");
+                    _logger.LogError(ex, $"Could not add A recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                }
+            }
+            foreach (var record in recordset.Spec.CNameRecords)
+            {
+                try
+                {
+                    await client.AddCnameRecordset(record.Name, record.TtlSecs, record.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Could not add CName recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                }
+            }
+            foreach (var record in recordset.Spec.TxtRecords)
+            {
+                try
+                {
+                    await client.AddTxtRecordset(record.Name, record.TtlSecs, record.Values);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Could not add Txt recordset {record.Name} for {recordset.Spec.DnsZone}!");
                 }
             }
 
-            await UpdateStatus(recordset, DnsRecordset.Statuses.Done);
+            await UpdateRecordsetStatus(recordset, DnsRecordset.Statuses.Done);
         }
         private async Task RecordsetRemoved(DnsRecordset recordset)
         {
@@ -85,16 +107,37 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
             if (!_dnsClientFactory.TryGetClient(recordset.Spec.DnsZone, out var client))
             {
                 _logger.LogWarning($"Missing credentials for zone {recordset.Spec.DnsZone}. Retrying...");
-                await UpdateStatus(recordset, DnsRecordset.Statuses.RetryingRemove);
                 new Timer(async x => await RecordsetRemoved(recordset), null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
                 return;
             }
 
-            foreach (var record in recordset.Spec.RecordSets)
+            foreach (var record in recordset.Spec.ARecords)
             {
                 try
                 {
-                    await client.RemoveRecordset(record.Name, record.Type);
+                    await client.RemoveARecordset(record.Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Could not remove recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                }
+            }
+            foreach (var record in recordset.Spec.CNameRecords)
+            {
+                try
+                {
+                    await client.RemoveCNameRecordset(record.Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Could not remove recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                }
+            }
+            foreach (var record in recordset.Spec.TxtRecords)
+            {
+                try
+                {
+                    await client.RemoveTxtRecordset(record.Name);
                 }
                 catch (Exception ex)
                 {
@@ -104,7 +147,7 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
 
             _recordsets.Remove(recordset.Metadata.Name, out var _);
         }
-        private async Task UpdateStatus(DnsRecordset recordset, DnsRecordset.Statuses status)
+        private async Task UpdateRecordsetStatus(DnsRecordset recordset, DnsRecordset.Statuses status)
         {
             recordset.Metadata.Annotations[DnsRecordset.StatusAnnotationName] = status.ToString();
 

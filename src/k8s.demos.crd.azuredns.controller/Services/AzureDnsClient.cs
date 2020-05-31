@@ -17,34 +17,55 @@ namespace k8s.demos.crd.azuredns.controller.Services
             _credentials = credentials;
         }
 
-        public async Task AddRecordset(string name, string type, int ttlSeconds, string[] ipAddresses)
+        public async Task AddARecordset(string name, int ttlSeconds, string[] ipAddresses)
         {
-            if (!type.Equals("A", System.StringComparison.OrdinalIgnoreCase))
-            {
-                throw new System.Exception("Only supports adding A records at the moment");
-            }
+            var recordSet = new RecordSet();
+            recordSet.TTL = ttlSeconds;
+            recordSet.ARecords = new List<ARecord>(ipAddresses.Select(x => new ARecord(x)));
 
-            var dnsClient = await GetClient();
+            await AddRecordset(name, RecordType.A, recordSet);
+        }
+        public async Task AddCnameRecordset(string name, int ttlSeconds, string value)
+        {
+            var recordSet = new RecordSet();
+            recordSet.TTL = ttlSeconds;
+            recordSet.CnameRecord = new CnameRecord(value);
 
-            var recordSetParams = new RecordSet();
-            recordSetParams.TTL = ttlSeconds;
-            recordSetParams.ARecords = new List<ARecord>(ipAddresses.Select(x => new ARecord(x)));
+            await AddRecordset(name, RecordType.CNAME, recordSet);
+        }
+        public async Task AddTxtRecordset(string name, int ttlSeconds, string[] values)
+        {
+            var recordSet = new RecordSet();
+            recordSet.TTL = ttlSeconds;
+            recordSet.TxtRecords = new List<TxtRecord>(values.Select(x => new TxtRecord(new[] { x })));
 
-            var recordSet = await dnsClient.RecordSets.CreateOrUpdateAsync(_credentials.ResourceGroup, _credentials.DnsZone, name, RecordType.A, recordSetParams);
+            await AddRecordset(name, RecordType.TXT, recordSet);
         }
 
-        public async Task RemoveRecordset(string name, string type)
+        public async Task RemoveARecordset(string name)
         {
-            if (!type.Equals("A", System.StringComparison.OrdinalIgnoreCase))
-            {
-                throw new System.Exception("Only supports adding A records at the moment");
-            }
+            await RemoveRecordset(name, RecordType.A);
+        }
+        public async Task RemoveCNameRecordset(string name)
+        {
+            await RemoveRecordset(name, RecordType.CNAME);
+        }
+        public async Task RemoveTxtRecordset(string name)
+        {
+            await RemoveRecordset(name, RecordType.TXT);
+        }
 
+        private async Task AddRecordset(string name, RecordType recordType, RecordSet recordSet)
+        {
             var dnsClient = await GetClient();
 
+            await dnsClient.RecordSets.CreateOrUpdateAsync(_credentials.ResourceGroup, _credentials.DnsZone, name, recordType, recordSet);
+        }
+        private async Task RemoveRecordset(string name, RecordType type)
+        {
+            var dnsClient = await GetClient();
             await dnsClient.RecordSets.DeleteAsync(_credentials.ResourceGroup, _credentials.DnsZone, name, RecordType.A);
         }
-
         private async Task<DnsManagementClient> GetClient()
         {
             var serviceCreds = await ApplicationTokenProvider.LoginSilentAsync(_credentials.TenantId, _credentials.ClientId, _credentials.ClientSecret);

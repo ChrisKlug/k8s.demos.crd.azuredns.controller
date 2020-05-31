@@ -17,15 +17,30 @@ namespace k8s.demos.crd.azuredns.controller.Models
         public class DnsRecordsetSpec
         {
             public string DnsZone { get; set; }
-            public DnsRecord[] RecordSets { get; set; }
+            public ARecord[] ARecords { get; set; }
+            public TxtRecord[] TxtRecords { get; set; }
+            public CNameRecord[] CNameRecords { get; set; }
         }
 
-        public class DnsRecord
+        public abstract class DnsRecord
         {
             public string Name { get; set; }
-            public string Type { get; set; }
             public int TtlSecs { get; set; }
+        }
+
+        public class ARecord : DnsRecord
+        {
             public string[] IpAddresses { get; set; }
+        }
+
+        public class TxtRecord : DnsRecord
+        {
+            public string[] Values { get; set; }
+        }
+
+        public class CNameRecord : DnsRecord
+        {
+            public string Value { get; set; }
         }
 
         public enum Statuses
@@ -34,7 +49,6 @@ namespace k8s.demos.crd.azuredns.controller.Models
             Retrying,
             Creating,
             Removing,
-            RetryingRemove,
             Done
         }
     }

@@ -4,9 +4,16 @@ metadata:
   name: demo.zerokoll.com
 spec:
   dnsZone: zerokoll.com
-  recordSets:
+  aRecords:
     - name: dnsdemo
-      type: A
       ttlSecs: 3600
       ipAddresses:
         - 127.0.0.1
+  txtRecords:
+    - name: dnsdemo
+      values: 
+        - Hello world!
+        - Hello world again!
+  cnameRecords:
+    - name: dns
+      alias: dnsdemo.zerokoll.com
