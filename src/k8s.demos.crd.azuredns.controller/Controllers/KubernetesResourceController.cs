@@ -39,10 +39,15 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
         }
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            _watcher.Dispose();
+            if (_leaderCheckTimer != null)
+                _leaderCheckTimer.Dispose();
+
+            if (_watcher != null)
+                _watcher.Dispose();
 
             return Task.CompletedTask;
         }
+
         private void OnPromotedToLeader()
         {
             _logger.LogInformation("Instance promoted to leader! Starting monitoring...");
