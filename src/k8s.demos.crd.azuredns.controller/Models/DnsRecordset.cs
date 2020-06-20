@@ -46,7 +46,8 @@ namespace k8s.demos.crd.azuredns.controller.Models
         public enum Statuses
         {
             Unknown,
-            Retrying,
+            RetryingCreate,
+            RetryingRemove,
             Creating,
             Removing,
             Done

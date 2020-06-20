@@ -25,7 +25,6 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
         {
             _leaderCheckTimer = new Timer(async x =>
             {
-
                 var isLeader = await _leaderSelector.IsLeader();
                 if (isLeader)
                 {

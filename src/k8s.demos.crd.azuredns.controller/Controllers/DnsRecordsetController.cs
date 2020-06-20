@@ -29,7 +29,18 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
             switch (type)
             {
                 case WatchEventType.Added:
-                    await RecordsetAdded(item);
+                    switch (item.Status)
+                    {
+                        case DnsRecordset.Statuses.Unknown:
+                        case DnsRecordset.Statuses.Creating:
+                        case DnsRecordset.Statuses.RetryingCreate:
+                            await RecordsetAdded(item);
+                            return;
+                        case DnsRecordset.Statuses.Removing:
+                        case DnsRecordset.Statuses.RetryingRemove:
+                            await RecordsetRemoved(item);
+                            return;
+                    }
                     break;
                 case WatchEventType.Modified:
                     _logger.LogWarning("Modifications are not supported at the moment");
@@ -52,8 +63,7 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
             if (!_dnsClientFactory.TryGetClient(recordset.Spec.DnsZone, out var client))
             {
                 _logger.LogWarning($"Missing credentials for zone {recordset.Spec.DnsZone}. Retrying...");
-                await UpdateRecordsetStatus(recordset, DnsRecordset.Statuses.Retrying);
-                new Timer(async x => await RecordsetAdded(recordset), null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
+                await SetUpAddRetry(recordset);
                 return;
             }
 
@@ -68,6 +78,8 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Could not add A recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                    await SetUpAddRetry(recordset);
+                    return;
                 }
             }
             foreach (var record in recordset.Spec.CNameRecords)
@@ -79,6 +91,8 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Could not add CName recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                    await SetUpAddRetry(recordset);
+                    return;
                 }
             }
             foreach (var record in recordset.Spec.TxtRecords)
@@ -90,6 +104,8 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Could not add Txt recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                    await SetUpAddRetry(recordset);
+                    return;
                 }
             }
 
@@ -107,7 +123,7 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
             if (!_dnsClientFactory.TryGetClient(recordset.Spec.DnsZone, out var client))
             {
                 _logger.LogWarning($"Missing credentials for zone {recordset.Spec.DnsZone}. Retrying...");
-                new Timer(async x => await RecordsetRemoved(recordset), null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
+                await SetUpDeleteRetry(recordset);
                 return;
             }
 
@@ -120,6 +136,8 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Could not remove recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                    await SetUpDeleteRetry(recordset);
+                    return;
                 }
             }
             foreach (var record in recordset.Spec.CNameRecords)
@@ -131,6 +149,8 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Could not remove recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                    await SetUpDeleteRetry(recordset);
+                    return;
                 }
             }
             foreach (var record in recordset.Spec.TxtRecords)
@@ -142,6 +162,8 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Could not remove recordset {record.Name} for {recordset.Spec.DnsZone}!");
+                    await SetUpDeleteRetry(recordset);
+                    return;
                 }
             }
 
@@ -156,6 +178,17 @@ namespace k8s.demos.crd.azuredns.controller.Controllers
             patch.Operations.ForEach(x => x.path = x.path.ToLower());
 
             var response = await Kubernetes.PatchClusterCustomObjectAsync(new V1Patch(patch), Group, Version, Plural, recordset.Metadata.Name);
+        }
+
+        private async Task SetUpAddRetry(DnsRecordset recordset)
+        {
+            await UpdateRecordsetStatus(recordset, DnsRecordset.Statuses.RetryingCreate);
+            new Timer(async x => await RecordsetAdded(recordset), null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
+        }
+        private async Task SetUpDeleteRetry(DnsRecordset recordset)
+        {
+            await UpdateRecordsetStatus(recordset, DnsRecordset.Statuses.RetryingRemove);
+            new Timer(async x => await RecordsetRemoved(recordset), null, TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(-1));
         }
 
         protected override string Group => DnsRecordset.Group;

@@ -64,7 +64,7 @@ namespace k8s.demos.crd.azuredns.controller.Services
         private async Task RemoveRecordset(string name, RecordType type)
         {
             var dnsClient = await GetClient();
-            await dnsClient.RecordSets.DeleteAsync(_credentials.ResourceGroup, _credentials.DnsZone, name, RecordType.A);
+            await dnsClient.RecordSets.DeleteAsync(_credentials.ResourceGroup, _credentials.DnsZone, name, type);
         }
         private async Task<DnsManagementClient> GetClient()
         {
